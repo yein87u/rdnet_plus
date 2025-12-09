@@ -51,7 +51,8 @@ def _GetMainParameters():
     rdnet_base_SAttention(第一個ESE前凍結)              Total parameters: 81,719,381       val_acc: 93.70%   val_loss: 0.0008   test_acc: 94.69%     test_loss: 0.0005     F1: 76.9600 (SAttention_v1)
     rdnet_base_SAttention(呈上, 加入損失alpha)          Total parameters: 81,719,381       val_acc: 92.81%   val_loss: 0.0008   test_acc: 94.40%     test_loss: 0.0006     F1: 75.9733 (SAttention_v2)
     rdnet_base_SAttention(呈5, lr LR_MUL更改)           Total parameters: 81,719,381       val_acc: 93.50%   val_loss: 0.0008   test_acc: 94.20%     test_loss: 0.0006     F1: 74.6704 (SAttention_v3)
-    rdnet_base_SAttention(呈5, ksize:7=>3)              Total parameters: 49,926,423        val_acc: 93.01   val_loss: 0.0009    test_acc: 94.99%     test_loss: 0.0006      F1: 78.0857 (SAttention_v4)
+    rdnet_base_SAttention(呈5, ksize:7=>3)              Total parameters: 81,717,221        val_acc: 93.01   val_loss: 0.0009    test_acc: 94.99%     test_loss: 0.0006      F1: 78.0857 (SAttention_v4)
+    rdnet_base_SAttention(呈7, 取代 CLAHE)   
     '''
     parser.add_argument('--modelName', type=str, default="rdnet_base_SAttention")
 
@@ -59,7 +60,7 @@ def _GetMainParameters():
     parser.add_argument('--scheduler', type=str, default="CosineAnnealingWarmRestarts") # CosineAnnealingWarmRestarts
     
     parser.add_argument('--phase', type=str, default="train")
-    parser.add_argument('--train_version', type=str, default="_v4")
+    parser.add_argument('--train_version', type=str, default="_v5")
     parser.add_argument('--pretrained_path', type=str, default="./weight")
 
     parser.add_argument('--epochs', type=int, default=25)

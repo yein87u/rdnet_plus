@@ -76,11 +76,24 @@ class ImagesDataset(torch.utils.data.Dataset):
                         self.args.image_size[1],), 
 
                 A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8)),
+
+                # # 取代 CLAHE：亮度/對比增強（模擬不同光線） 
+                # A.RandomBrightnessContrast(
+                #     brightness_limit=0.35, 
+                #     contrast_limit=0.35, 
+                #     p=0.8), 
+                
+                # # 顏色增強：模擬不同相機/季節的葉色變化 
+                # A.HueSaturationValue(
+                #     hue_shift_limit=12, 
+                #     sat_shift_limit=20, 
+                #     val_shift_limit=15, 
+                #     p=0.6),
                 
                 A.HorizontalFlip(p=0.5), 
                 A.VerticalFlip(p=0.2), 
                 A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.15, rotate_limit=15, p=0.5),
-
+                
                 A.Normalize(mean=self.mean, std=self.std),
                 ToTensorV2(),
             ])

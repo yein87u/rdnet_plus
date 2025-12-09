@@ -66,7 +66,7 @@ def create_annotation_file(all_data, save_path):
     data_file['test']['path'] = test_paths
     data_file['test']['label'] = test_labels
 
-    pickle.dump(data_file, open(save_path, 'wb'))
+    # pickle.dump(data_file, open(save_path, 'wb'))
     print(len(data_file['train']['path']), len(data_file['train']['label']), data_file['train']['path'][0], data_file['train']['label'][0])
     print(len(data_file['val']['path']), len(data_file['val']['label']), data_file['val']['path'][0], data_file['val']['label'][0])
     print(len(data_file['test']['path']), len(data_file['test']['label']), data_file['test']['path'][0], data_file['test']['label'][0])
@@ -79,6 +79,10 @@ def create_annotation_file(all_data, save_path):
     train_counts = Counter(train_labels)
     val_counts = Counter(val_labels)
     test_counts = Counter(test_labels)
+
+    print(f"train_counts: {train_counts}")
+    print(f"val_counts: {val_counts}")
+    print(f"test_counts: {test_counts}")
 
     # 合併成 DataFrame 方便看
     all_labels = sorted(set(all_data['label']))
@@ -99,4 +103,18 @@ if __name__ == '__main__':
     args = config.GetArgument()
     all_data = _GetAllData(args.dataset_root)
     create_annotation_file(all_data, args.pkl_path)
-    
+
+
+
+'''
+197
+193
+124
+195
+238
+120
+239
+146
+35
+127
+'''

@@ -48,7 +48,7 @@ def load_best_model(args, model):
     """
     載入訓練好的最佳模型 checkpoint
     """
-    ckpt_path = './checkpoint/rdnet_base_SAttention_bz16__v4/rdnet_base_SAttention_ckpt_epoch24.pth.tar'
+    ckpt_path = './checkpoint/rdnet_base_SAttention_bz16__v5/rdnet_base_SAttention_ckpt_epoch18.pth.tar'
     print(f"✅ 載入模型權重：{ckpt_path}")
     checkpoint = torch.load(ckpt_path, map_location=args.device)
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -61,18 +61,41 @@ def test_one_epoch(args, model, dataloader, criterion):
     all_preds, all_labels = [], []
     total_loss, correct, total = 0, 0, 0
 
+    '''
+    # 類別測試用
+    arr = [197, 193, 124, 195, 238, 120, 239, 146, 35, 127]
+    arr_tensor = torch.tensor(arr, dtype=torch.int64).to(args.device)
+    '''
+
     with tqdm(dataloader, desc="Testing", ncols=100) as pbar:
         for images, labels in pbar:
             images, labels = images.to(args.device), labels.to(args.device)
+            
             with torch.no_grad():
                 # if 'SAttention' in args.modelName:
                 if '.nv_in1k'  in args.modelName or 'SAttention' in args.modelName:
                     features, logits = model(images)
                 else:
                     logits = model(images)
+                
+                '''
+                # 類別測試用, ~is_in_arr為取反向
+                is_in_arr = torch.isin(labels, arr_tensor)
+                mask_to_calculate = is_in_arr
+                if mask_to_calculate.sum().item() == 0:
+                    # 如果所有樣本都被排除，則跳過這個批次的累積
+                    continue
+                logits = logits[mask_to_calculate]
+                labels = labels[mask_to_calculate]
+                '''
+
                 loss = criterion(logits, labels)
                 _, preds = torch.max(logits, 1)
 
+            '''
+            # 類別測試用
+            total_loss += loss.item() * labels.size(0)
+            '''
             total_loss += loss.item() * images.size(0)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
@@ -123,7 +146,6 @@ def main(args):
 
 
     model, criterion = accelerator.prepare(model, criterion)
-    print(model)
 
     # === 執行測試 ===
     acc, f1, precision, recall, loss = test_one_epoch(args, model, test_dataloader, criterion)
