@@ -58,29 +58,32 @@ def _GetModel(args):
 #     return optimizer
 
 def _GetOptimizer(args, model: nn.Module):
-    optimizer = None
-    # 定義學習率乘數, 新模組 (SA和FC) 相對於微調層的學習率乘數, 5 or 10
-    LR_MULTIPLIER = 5.0
+    if '.nv_in1k' in args.modelName:
+        param_groups = model.parameters()
+    else:
+        optimizer = None
+        # 定義學習率乘數, 新模組 (SA和FC) 相對於微調層的學習率乘數, 5 or 10
+        LR_MULTIPLIER = 5.0
 
-    # SA 模組參數
-    sa_params = model.get_sa_parameters()
-    # FC 層參數
-    fc_params = model.fc.parameters()
+        # SA 模組參數
+        sa_params = model.get_sa_parameters()
+        # FC 層參數
+        fc_params = model.fc.parameters()
 
-    # 獲取所有可訓練參數的集合
-    all_trainable_params = [p for p in model.parameters() if p.requires_grad]
-    # 將 SA 和 FC 參數轉換為集合以便於排除
-    sa_fc_set = set(list(model.fc.parameters()) + list(model.get_sa_parameters()))
-    # 主幹網路微調參數 = 所有可訓練參數 - SA參數 - FC參數
-    backbone_params = [p for p in all_trainable_params if p not in sa_fc_set]
-    
-    # 創建參數字典列表
-    param_groups = [
-        # Group 1: 主幹網路微調 (預訓練權重) - 使用基礎LR
-        {'params': backbone_params, 'lr': args.lr, 'name': 'backbone_finetune'},
-        # Group 2: FC 層和 SA 模組 (隨機初始化) - 使用較高LR
-        {'params': list(sa_params) + list(fc_params), 'lr': args.lr * LR_MULTIPLIER, 'name': 'new_modules'},
-    ]
+        # 獲取所有可訓練參數的集合
+        all_trainable_params = [p for p in model.parameters() if p.requires_grad]
+        # 將 SA 和 FC 參數轉換為集合以便於排除
+        sa_fc_set = set(list(model.fc.parameters()) + list(model.get_sa_parameters()))
+        # 主幹網路微調參數 = 所有可訓練參數 - SA參數 - FC參數
+        backbone_params = [p for p in all_trainable_params if p not in sa_fc_set]
+        
+        # 創建參數字典列表
+        param_groups = [
+            # Group 1: 主幹網路微調 (預訓練權重) - 使用基礎LR
+            {'params': backbone_params, 'lr': args.lr, 'name': 'backbone_finetune'},
+            # Group 2: FC 層和 SA 模組 (隨機初始化) - 使用較高LR
+            {'params': list(sa_params) + list(fc_params), 'lr': args.lr * LR_MULTIPLIER, 'name': 'new_modules'},
+        ]
 
     # --- 4. 初始化優化器 ---
     if(args.optimizer == "adamw"):
@@ -91,7 +94,7 @@ def _GetOptimizer(args, model: nn.Module):
         )
     
     return optimizer
-    
+
 def _GetScheduler(args, optimizer):
     scheduler = None
     if(args.scheduler == "CosineAnnealingWarmRestarts"):
