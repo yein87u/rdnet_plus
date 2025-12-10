@@ -9,7 +9,7 @@ def _GetMainParameters():
     parser = argparse.ArgumentParser()
     parser.add_argument('--system', type=str, default='Linux')
     parser.add_argument('--code_root', type=str, default='C:\\Users\\a1233\\Desktop\\rdnet_plus')
-    parser.add_argument('--dataset_root', type=str, default='C:\\Users\\a1233\\Desktop\\Datasets\\PDD127')
+    parser.add_argument('--dataset_root', type=str, default='C:\\Users\\a1233\\Desktop\\Datasets\\PDD271')
     parser.add_argument('--pkl_path', type=str, default='./datasets/all_data.pkl')
     
     '''
@@ -54,13 +54,13 @@ def _GetMainParameters():
     rdnet_base_SAttention(呈5, ksize:7=>3)              Total parameters: 81,717,221        val_acc: 93.01   val_loss: 0.0009    test_acc: 94.99%     test_loss: 0.0006      F1: 78.0857 (SAttention_v4)
     rdnet_base_SAttention(呈7, 取代 CLAHE)   
     '''
-    parser.add_argument('--modelName', type=str, default="rdnet_base_SAttention")
+    parser.add_argument('--modelName', type=str, default="rdnet_base.nv_in1k")
 
     parser.add_argument('--optimizer', type=str, default="adamw")
     parser.add_argument('--scheduler', type=str, default="CosineAnnealingWarmRestarts") # CosineAnnealingWarmRestarts
     
     parser.add_argument('--phase', type=str, default="train")
-    parser.add_argument('--train_version', type=str, default="_v5")
+    parser.add_argument('--train_version', type=str, default="origin_v1")
     parser.add_argument('--pretrained_path', type=str, default="./weight")
 
     parser.add_argument('--epochs', type=int, default=25)
@@ -73,7 +73,7 @@ def _GetMainParameters():
     parser.add_argument('--image_size', type=list, default=[224, 224])
     parser.add_argument('--seed', type=int, default=42)
 
-    parser.add_argument('--root_model', type=str, default='checkpoint')
+    parser.add_argument('--root_model', type=str, default='new_checkpoint')
 
     return parser.parse_args()
 
