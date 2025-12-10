@@ -172,7 +172,7 @@ def _SaveModel(args, model):
         os.makedirs(path)
 
     # 儲存 checkpoint
-    checkpoint_path = os.path.join(path, f"{args.modelName}_ckpt_epoch{args.epoch}.pth.tar")
+    checkpoint_path = os.path.join(path, f"{args.modelName}_ckpt.pth.tar")
     utils.save_checkpoint(
         checkpoint_path,
         {

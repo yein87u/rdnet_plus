@@ -48,7 +48,7 @@ def load_best_model(args, model):
     """
     載入訓練好的最佳模型 checkpoint
     """
-    ckpt_path = './checkpoint/rdnet_base_SAttention_bz16__v5/rdnet_base_SAttention_ckpt_epoch18.pth.tar'
+    ckpt_path = './new_checkpoint/rdnet_base_SAttention_bz16__v1/rdnet_base_SAttention_ckpt_epoch25.pth.tar'
     print(f"✅ 載入模型權重：{ckpt_path}")
     checkpoint = torch.load(ckpt_path, map_location=args.device)
     model.load_state_dict(checkpoint['model_state_dict'])

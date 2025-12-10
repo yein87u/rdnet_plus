@@ -1,6 +1,7 @@
 # 忽略資料夾
 __pycache__/
 checkpoint/
+new_checkpoint/
 weight/
 sa_attention_maps/
 
