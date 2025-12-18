@@ -3,6 +3,7 @@
 import config
 import os
 import pickle
+from collections import Counter
 
 def _GetAllData(dataset_root, save_path):
     data_file = {
@@ -40,7 +41,29 @@ def _GetAllData(dataset_root, save_path):
         except Exception as e:
             print(f"讀取檔案 {file_path} 時發生錯誤: {e}")
     
-    pickle.dump(data_file, open(save_path, 'wb'))
+    # pickle.dump(data_file, open(save_path, 'wb'))
+
+    # --- 新增統計功能 ---
+    print("\n" + "="*30)
+    print("📊 數據集類別統計結果:")
+    print("="*30)
+    
+    for mode in modes:
+        labels = data_file[mode]['label']
+        if not labels:
+            print(f"[{mode.upper()}] 無數據")
+            continue
+            
+        # 使用 Counter 統計
+        counts = Counter(labels)
+        # 依照類別編號排序 (由小到大)
+        sorted_counts = dict(sorted(counts.items()))
+        
+        total = sum(counts.values())
+        print(f"--- {mode.upper()} (總數: {total}) ---")
+        for label, count in sorted_counts.items():
+            print(f"  類別 {label}: {count} 張")
+    print("="*30 + "\n")
 
     return data_file
 

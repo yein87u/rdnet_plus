@@ -53,22 +53,28 @@ def _GetMainParameters():
     rdnet_base_SAttention(呈5, lr LR_MUL更改)           Total parameters: 81,719,381       val_acc: 93.50%   val_loss: 0.0008   test_acc: 94.20%     test_loss: 0.0006     F1: 74.6704 (SAttention_v3)
     rdnet_base_SAttention(呈5, ksize:7=>3)              Total parameters: 81,717,221        val_acc: 93.01   val_loss: 0.0009    test_acc: 94.99%     test_loss: 0.0006      F1: 78.0857 (SAttention_v4)
     rdnet_base_SAttention(呈7, 取代 CLAHE)   
+    
+    # 換資料集切分方法後 /new_checkpoints
+    1.rdnet_base_SAttention                                 Total parameters: 81,717,221       test_acc: 92.50      F1: 71.50 (v1)
+    2.rdnet_base_SAttention(1*1convfc, HSV, lightness)      Total parameters: 81,717,221       test_acc: 92.41%     F1: 71.42 (v2)
+    3.rdnet_base_SAttention(呈1, train加入sampler)          Total parameters: 81,717,221        test_acc: 91.42%     F1: 68.32 (v3)
+    4.呈1 (換成LDAM+DRW+CHALE, 分類頭正規化,drop)           Total parameters: 477,446 => 81,717,221   test_acc: 93.29%    F1: 74.05 (v5)
     '''
-    parser.add_argument('--modelName', type=str, default="rdnet_base.nv_in1k")
+    parser.add_argument('--modelName', type=str, default="rdnet_base_SAttention")
 
     parser.add_argument('--optimizer', type=str, default="adamw")
     parser.add_argument('--scheduler', type=str, default="CosineAnnealingWarmRestarts") # CosineAnnealingWarmRestarts
     
     parser.add_argument('--phase', type=str, default="train")
-    parser.add_argument('--train_version', type=str, default="origin_v1")
+    parser.add_argument('--train_version', type=str, default="v6")
     parser.add_argument('--pretrained_path', type=str, default="./weight")
 
-    parser.add_argument('--epochs', type=int, default=25)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--classes', type=int, default=271)
     parser.add_argument('--workers', type=int, default=4)
-    parser.add_argument('--lr', type=float, default=5e-5) # 3e-5、1e-3
-    parser.add_argument('--weight_decay', type=float, default=1e-4) # 5e-3、1e-4
+    parser.add_argument('--lr', type=float, default=3e-5) # 3e-5、1e-3
+    parser.add_argument('--weight_decay', type=float, default=1e-2) # 5e-3、1e-4
 
     parser.add_argument('--image_size', type=list, default=[224, 224])
     parser.add_argument('--seed', type=int, default=42)
