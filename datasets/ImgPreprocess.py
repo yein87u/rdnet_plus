@@ -32,39 +32,41 @@ class ImagesDataset(torch.utils.data.Dataset):
         self.label_list = list(self.data['label'])
 
     def _get_mean_std(self):
-        if self.phase == 'train':
-            self.mean = np.zeros(3, dtype=np.float32)   
-            self.std = np.zeros(3, dtype=np.float32)
-            numSamples = 0
-            for img_path in tqdm(self.data['path'], desc=f"計算 {self.phase} mean/std", ncols=100, leave=False):
-                image = cv2.imread(img_path)
-                if image is None:
-                    print(f"⚠️ 無法讀取圖片：{img_path}")
-                    continue
-                image = image / 255.0
+        # if self.phase == 'train':
+        #     self.mean = np.zeros(3, dtype=np.float32)   
+        #     self.std = np.zeros(3, dtype=np.float32)
+        #     numSamples = 0
+        #     for img_path in tqdm(self.data['path'], desc=f"計算 {self.phase} mean/std", ncols=100, leave=False):
+        #         image = cv2.imread(img_path)
+        #         if image is None:
+        #             print(f"⚠️ 無法讀取圖片：{img_path}")
+        #             continue
+        #         image = image / 255.0
 
-                self.mean[0] += np.mean(image[...,0])
-                self.mean[1] += np.mean(image[...,1])
-                self.mean[2] += np.mean(image[...,2])
-                self.std[0] += np.std(image[...,0])
-                self.std[1] += np.std(image[...,1])
-                self.std[2] += np.std(image[...,2])
+        #         self.mean[0] += np.mean(image[...,0])
+        #         self.mean[1] += np.mean(image[...,1])
+        #         self.mean[2] += np.mean(image[...,2])
+        #         self.std[0] += np.std(image[...,0])
+        #         self.std[1] += np.std(image[...,1])
+        #         self.std[2] += np.std(image[...,2])
                 
-                numSamples += 1
-            self.mean /= numSamples
-            self.std /= numSamples
-            self.args.mean = self.mean
-            self.args.std = self.std
-        elif self.phase == 'val' or self.phase == 'test':
-            self.mean = self.args.mean
-            self.std = self.args.std
-        self.mean = list(self.mean)
-        self.std = list(self.std)
+        #         numSamples += 1
+        #     self.mean /= numSamples
+        #     self.std /= numSamples
+        #     self.args.mean = self.mean
+        #     self.args.std = self.std
+        # elif self.phase == 'val' or self.phase == 'test':
+        #     self.mean = self.args.mean
+        #     self.std = self.args.std
+        # self.mean = list(self.mean)
+        # self.std = list(self.std)
 
+        self.mean = [np.float32(0.36738136), np.float32(0.5139409),  np.float32(0.41398662)]
+        self.std = [np.float32(0.18696505), np.float32(0.1731369),  np.float32(0.18059126)]
         # self.mean = [np.float32(0.36649305), np.float32(0.51296484), np.float32(0.41327184)]
         # self.std = [np.float32(0.18601118), np.float32(0.17255422), np.float32(0.17981789)]
-        # self.args.mean = self.mean
-        # self.args.std = self.std
+        self.args.mean = self.mean
+        self.args.std = self.std
         # print(f'mean: {self.mean}\nstd: {self.std}')
     
     def _setup_transforms(self, phase): 
@@ -76,19 +78,20 @@ class ImagesDataset(torch.utils.data.Dataset):
                         self.args.image_size[1],), 
 
                 A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8)),
-
-                # # 取代 CLAHE：亮度/對比增強（模擬不同光線） 
+                # 亮度 / 對比（模擬光線）
                 # A.RandomBrightnessContrast(
-                #     brightness_limit=0.35, 
-                #     contrast_limit=0.35, 
-                #     p=0.8), 
-                
-                # # 顏色增強：模擬不同相機/季節的葉色變化 
+                #     brightness_limit=0.25, 
+                #     contrast_limit=0.25,   
+                #     p=0.7
+                # ),
+
+                # # HSV 色彩增強（模擬季節 / 相機差異）
                 # A.HueSaturationValue(
-                #     hue_shift_limit=12, 
-                #     sat_shift_limit=20, 
-                #     val_shift_limit=15, 
-                #     p=0.6),
+                #     hue_shift_limit=10,
+                #     sat_shift_limit=15,
+                #     val_shift_limit=10,
+                #     p=0.7
+                # ),
                 
                 A.HorizontalFlip(p=0.5), 
                 A.VerticalFlip(p=0.2), 

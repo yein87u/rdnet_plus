@@ -15,6 +15,7 @@ from typing import Dict, Any
 import torch.nn as nn
 
 from Loss import LDAMLoss, FocalLoss
+from torch.utils.data import WeightedRandomSampler
 
 def _GetModel(args):
     if args.modelName == "rdnet_small.nv_in1k":
@@ -34,8 +35,8 @@ def _GetModel(args):
         model = RDNet_Base_ComplexHead(num_classes=args.classes)
     elif args.modelName == 'rdnet_base_SAttention':
         print("Use [rdnet_base & spatial attention]")
-        model = RDNet_Base_SAttention(num_classes=args.classes, sa_kernel_size=3)
-        model.freeze_and_unfreeze_params()
+        model = RDNet_Base_SAttention(num_classes=args.classes, sa_kernel_size=3, drop_rate=0.2)
+        # model.freeze_and_unfreeze_params()
     
     # model = timm.create_model(
     #     args.modelName, 
@@ -63,7 +64,7 @@ def _GetOptimizer(args, model: nn.Module):
     else:
         optimizer = None
         # 定義學習率乘數, 新模組 (SA和FC) 相對於微調層的學習率乘數, 5 or 10
-        LR_MULTIPLIER = 5.0
+        LR_MULTIPLIER = 2.0
 
         # SA 模組參數
         sa_params = model.get_sa_parameters()
@@ -100,7 +101,7 @@ def _GetScheduler(args, optimizer):
     if(args.scheduler == "CosineAnnealingWarmRestarts"):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer, 
-            T_0=26, 
+            T_0=5, 
             T_mult=1, 
             eta_min=1e-6
         )
@@ -217,7 +218,12 @@ def main(args):
     args = config.MetricsInit(args)
     model = _GetModel(args)
 
-    # print(model)
+    base_lr = args.lr
+    UNFREEZE_EPOCH = 20
+    if hasattr(model, 'update_training_stage'):
+        model.update_training_stage(stage=1)
+
+    print(model)
     # # 計算所有參數數量
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -228,31 +234,40 @@ def main(args):
     optimizer = _GetOptimizer(args, model)
     scheduler = _GetScheduler(args, optimizer)
 
-    # 假設 train_dataset.targets 是一個包含所有標籤的列表或 numpy array
-    train_labels = train_dataset.cls_num_list # 計算每個類別的樣本數量
-    num_classes = len(train_labels) # 創建一個包含所有類別計數的列表, 假設類別從 0 到 num_classes-1
-    counts = [train_labels[i] for i in range(num_classes)]
-    # 計算類別權重(倒數)
-    counts = torch.tensor(counts, dtype=torch.float32)  # W_j = 1 / N_j
-    inverse_counts = 1.0 / counts# 正規化權重, 讓權重總和為類別數，防止 Loss 過大/過小
-    class_weights = inverse_counts / torch.sum(inverse_counts) * num_classes# 將權重轉移到設備 (如果使用 GPU)if args.device.type == 'cuda':
-    class_weights = class_weights.to(args.device)
-    print(f"class_weights: {class_weights}")
-    # alpha=class_weights,
+    # # 假設 train_dataset.targets 是一個包含所有標籤的列表或 numpy array
+    # train_labels = train_dataset.cls_num_list # 計算每個類別的樣本數量
+    # num_classes = len(train_labels) # 創建一個包含所有類別計數的列表, 假設類別從 0 到 num_classes-1
+    # counts = [train_labels[i] for i in range(num_classes)]
+    # # 計算類別權重(倒數)
+    # counts = torch.tensor(counts, dtype=torch.float32)  # W_j = 1 / N_j
+    # inverse_counts = 1.0 / counts# 正規化權重, 讓權重總和為類別數，防止 Loss 過大/過小
+    # class_weights = inverse_counts / torch.sum(inverse_counts) * num_classes# 將權重轉移到設備 (如果使用 GPU)if args.device.type == 'cuda':
+    # class_weights = class_weights.to(args.device)
+    # print(f"class_weights: {class_weights}")
+    # # alpha=class_weights,
 
-    criterion = FocalLoss(
-        gamma=2.0, # Gamma 越大，對多數類別的抑制越強，強制關注少數類別
-        alpha=None,             # alpha=None時，讓 gamma 專注於難易樣本分類
-        reduction='mean', 
-        task_type='multi-class',
-        num_classes=args.classes
-    )
+    # criterion = FocalLoss(
+    #     gamma=2.0, # Gamma 越大，對多數類別的抑制越強，強制關注少數類別
+    #     alpha=None,             # alpha=None時，讓 gamma 專注於難易樣本分類
+    #     reduction='mean', 
+    #     task_type='multi-class',
+    #     num_classes=args.classes
+    # )
+
+    DRW_START_EPOCH = 35
+    cls_num_list = train_dataset.cls_num_list
+    criterion = nn.CrossEntropyLoss()
+    # 備用 Loss： LDAM 帶有邊界調整
+    ldam_criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.8, s=30) # max_m=0.5 和 s=30 是常見的起始值
+
+    # 初始 Loss 函數設定為基準 Loss
+    ldam_criterion = ldam_criterion.to(args.device)
 
     model, optimizer, train_dataloader, val_dataloader, \
     criterion, scheduler = args.accelerator.prepare(
         model, optimizer, train_dataloader, val_dataloader,
         criterion, scheduler
-    )
+    )    
     
     history = {
         'train_loss': [],
@@ -264,6 +279,26 @@ def main(args):
     for epoch in range(args.epochs):
         args.epoch = epoch + 1
 
+        if args.epoch == UNFREEZE_EPOCH and hasattr(model, 'update_training_stage'):
+            print(f"\n🌟 Epoch {args.epoch}: 觸發解凍邏輯！重新初始化優化器...")
+            # 解凍模型層
+            model.update_training_stage(stage=2)
+            
+            # 調整學習率 (微調階段通常用更小的 LR)
+            args.lr = base_lr * 0.5
+            # 重新建立優化器, 因為參數的 requires_grad 變了，舊的 optimizer 不會更新新解凍的層
+            optimizer = _GetOptimizer(args, model)
+            # 重新建立 Scheduler, 因為 optimizer 換了
+            scheduler = _GetScheduler(args, optimizer)
+            # Accelerator必須重新 prepare 新的 optimizer
+            if hasattr(args, 'accelerator'):
+                optimizer, scheduler = args.accelerator.prepare(optimizer, scheduler)
+                print("✨ Accelerator: Optimizer re-prepared.")
+
+        if args.epoch == DRW_START_EPOCH:
+            print(f"\n⚡ Epoch {args.epoch}: 啟用 LDAM Loss (Deferred Re-Weighting)")
+            # 將訓練使用的 Loss 函數切換為帶有邊界調整的 LDAM Loss
+            criterion = ldam_criterion.to(args.device)
         # === Training ===
         args.phase = "train"
         train_acc, train_f1, train_precision, \
