@@ -7,7 +7,7 @@ sa_attention_maps/
 
 # 忽略檔案
 *.png
-
-
+*.7z
+*.zip
 
 
