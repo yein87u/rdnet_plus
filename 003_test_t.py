@@ -6,7 +6,7 @@ import datasets
 import config
 import utils
 from models import rdnet_tiny, rdnet_small, rdnet_large, rdnet_base
-from models import RDNet_Tiny, RDNet_Small, RDNet_Base, RDNet_Large, RDNet_Base_ComplexHead, RDNet_Base_SAttention
+from models import RDNet_Tiny, RDNet_Small, RDNet_Base, RDNet_Large, RDNet_Base_SAttention
 # 加速
 from accelerate import Accelerator
 import timm
@@ -27,12 +27,9 @@ def _GetModel(args, device):
     elif args.modelName == "rdnet_large.nv_in1k":
         print("Use [rdnet_large.nv_in1k]")
         model = RDNet_Large(num_classes=args.classes).to(device)
-    elif args.modelName == 'rdnet_base_reload_head':
-        print("Use [rdnet_base & reload_head]")
-        model = RDNet_Base_ComplexHead(num_classes=args.classes).to(device)
     elif args.modelName == 'rdnet_base_SAttention':
         print("Use [rdnet_base & spatial attention]")
-        model = RDNet_Base_SAttention(num_classes=args.classes, sa_kernel_size=3)
+        model = RDNet_Base_SAttention(num_classes=args.classes, sa_kernel_size=3, drop_rate=0.2)
     
     # model = timm.create_model(
     #     args.modelName, 
@@ -48,7 +45,7 @@ def load_best_model(args, model):
     """
     載入訓練好的最佳模型 checkpoint
     """
-    ckpt_path = './new_checkpoint/rdnet_base_SAttention_bz16_v5/rdnet_base_SAttention_ckpt.pth.tar'
+    ckpt_path = './new_checkpoint/rdnet_base_SAttention_bz16_HSV_brightness_v1/rdnet_base_SAttention_ckpt.pth.tar'
     print(f"✅ 載入模型權重：{ckpt_path}")
     checkpoint = torch.load(ckpt_path, map_location=args.device)
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -58,6 +55,7 @@ def load_best_model(args, model):
 
 def test_one_epoch(args, model, dataloader, criterion):
     model.eval()
+    total_loss, correct, correct_top5, total = 0, 0, 0, 0
     all_preds, all_labels = [], []
     total_loss, correct, total = 0, 0, 0
 
@@ -102,15 +100,23 @@ def test_one_epoch(args, model, dataloader, criterion):
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
 
+            # 計算 Top-5
+            maxk = 5
+            _, top5_preds = logits.topk(maxk, dim=1, largest=True, sorted=True)
+            labels_resize = labels.view(-1, 1)
+            correct_top5 += (top5_preds == labels_resize).sum().item()
+
             pbar.set_postfix({
                 "Acc": f"{(correct/total*100):.2f}%",
+                "Top5": f"{(correct_top5/total*100):.2f}%",
                 "Loss": f"{(total_loss/total):.4f}"
             })
 
     acc, f1, precision, recall = utils.evaluate(all_labels, all_preds)
     loss = total_loss / total
+    final_acc5 = correct_top5 / total * 100
 
-    return acc, f1, precision, recall, loss
+    return acc, f1, precision, recall, loss, final_acc5
 
 
 def main(args):
@@ -148,10 +154,11 @@ def main(args):
     model, criterion = accelerator.prepare(model, criterion)
 
     # === 執行測試 ===
-    acc, f1, precision, recall, loss = test_one_epoch(args, model, test_dataloader, criterion)
+    acc, f1, precision, recall, loss, final_acc5 = test_one_epoch(args, model, test_dataloader, criterion)
 
     print(f"\n===== Test Result =====")
     print(f"Accuracy : {acc:.2f}%")
+    print(f"Top5 : {final_acc5:.2f}%")
     print(f"F1-Score : {f1:.4f}")
     print(f"Precision: {precision:.4f}")
     print(f"Recall   : {recall:.4f}")

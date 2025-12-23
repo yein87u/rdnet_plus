@@ -5,8 +5,7 @@ import os
 import datasets
 import config
 import utils
-from models import rdnet_tiny, rdnet_small, rdnet_large, rdnet_base
-from models import RDNet_Tiny, RDNet_Small, RDNet_Base, RDNet_Large, RDNet_Base_ComplexHead, RDNet_Base_SAttention
+from models import RDNet_Tiny, RDNet_Small, RDNet_Base, RDNet_Large, RDNet_Base_SAttention
 # 加速
 from accelerate import Accelerator
 import timm
@@ -27,9 +26,6 @@ def _GetModel(args, device):
     elif args.modelName == "rdnet_large.nv_in1k":
         print("Use [rdnet_large.nv_in1k]")
         model = RDNet_Large(num_classes=args.classes).to(device)
-    elif args.modelName == 'rdnet_base_reload_head':
-        print("Use [rdnet_base & reload_head]")
-        model = RDNet_Base_ComplexHead(num_classes=args.classes)
     elif args.modelName == 'rdnet_base_SAttention':
         print("Use [rdnet_base & spatial attention]")
         model = RDNet_Base_SAttention(num_classes=args.classes, sa_kernel_size=3)

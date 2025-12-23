@@ -54,53 +54,8 @@ class RDNet_Large(nn.Module):
     
 
 
-class RDNet_Base_ComplexHead(nn.Module):
-    """
-    將客製化的分類頭部 (ComplexHead) 直接替換到 timm 骨幹網路的 'head' 屬性上，
-    使模型結構在 print(model) 時更簡潔。
-    """
 
-    def get_head_parameters(self):
-        """返回分類頭部的參數迭代器"""
-        # self.model 是 timm 模型，head 已經被替換為您的 nn.Sequential
-        return self.model.head.parameters()
-    
-    def get_backbone_parameters(self):
-        """返回骨幹網路的參數迭代器 (不包含 head)"""
-        # 獲取所有參數，然後排除 head 的參數
-        head_params_set = set(self.model.head.parameters())
-        
-        # 迭代所有參數，只返回不在 head 集合中的參數
-        backbone_params = (p for p in self.model.parameters() if p not in head_params_set)
-        return backbone_params
-    
-    @staticmethod
-    def create_custom_head(in_features: int, num_classes: int):
-        """定義您圖示中的複雜分類頭部"""
-        return nn.Sequential(
-            nn.Linear(in_features, in_features),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            # nn.Linear(128, 64),
-            # nn.ReLU(),
-            nn.Linear(in_features, num_classes),
-        )
-
-    def __init__(self, num_classes: int):
-        super().__init__()
-        self.model = timm.create_model('rdnet_base.nv_in1k', pretrained=True, num_classes=0)
-        in_features = self.model.num_features
-        
-        # 關鍵步驟：僅替換 head 模塊內部的 'fc' 屬性
-        # 在 num_classes=0 的情況下，self.model.head.fc 應該是 nn.Identity()
-        self.model.head.fc = self.create_custom_head(in_features, num_classes)
-
-    def forward(self, x):
-        out = self.model(x) 
-
-        return out
-
-# --- 原始 SpatialAttentionModule 保持不變 ---
+# SpatialAttentionModule
 class SpatialAttentionModule(nn.Module):
     def __init__(self, kernel_size=7):
         super().__init__()
@@ -124,7 +79,7 @@ class SpatialAttentionModule(nn.Module):
 class RDNet_Base_SAttention(nn.Module):
     """
     包裝器類：
-    - 載入 rdnet_base.nv_in1k（timm 預訓練模型）
+    - 載入 rdnet_base.nv_in1k(timm 預訓練模型）
     - 在每個 EffectiveSEModule 後插入 SpatialAttentionModule (使用 nn.Sequential 替換)
     """
 
@@ -138,14 +93,7 @@ class RDNet_Base_SAttention(nn.Module):
             nn.Dropout(p=0.5),  # 新增 Dropout
             NormedLinear(1760, num_classes)
         )
-        '''
-        替換FC 層 (nn.Linear) 替換為 1x1 卷積層 (nn.Conv2d) ***
-        in_channels = 1760, out_channels = num_classes
-        '''
-        # self.num_classes = num_classes
-        # self.fc = nn.Conv2d(in_channels=1760, out_channels=self.num_classes, kernel_size=1)
-
-        # 執行注入 (不再需要 hook 和 self.sa_modules.ModuleList)
+        # 執行注入
         self._inject_spatial_attention(sa_kernel_size)
 
     # -------------------------------------------------
@@ -212,25 +160,6 @@ class RDNet_Base_SAttention(nn.Module):
         out = self.fc(x)
         return x, out
 
-        # # 運行主幹網絡，得到 1760 維的特徵向量
-        # # 這裡的 x (embedings) 是 [B, 1760]
-        # embedings = self.model.forward_features(x)
-        # embedings = self.model.head(embedings) 
-        # # 轉換為 4D (Batch, Channel, Height, Width)**
-        # # 從 [B, 1760] 轉換為 [B, 1760, 1, 1]
-        # fcn_input = embedings.unsqueeze(2).unsqueeze(3)
-        # # 經過 1x1 卷積層
-        # # out_fcn 維度: [B, num_classes, 1, 1]
-        # out_fcn = self.fc(fcn_input)
-        # # 調整回分類所需的格式
-        # # 從 [B, num_classes, 1, 1] 轉換回 [B, num_classes]
-        # out = out_fcn.squeeze() 
-        
-        # # 處理 num_classes=1 的特殊情況，確保輸出是 [B, 1] 而不是 [B]
-        # if out.dim() == 1 and self.num_classes == 1:
-        #     out = out.unsqueeze(1)
-        # return embedings, out
-
     # -------------------------------------------------
     # --- 參數分組 (已修改為匹配新的結構) ---
     def get_sa_parameters(self):
@@ -285,84 +214,37 @@ class RDNet_Base_SAttention(nn.Module):
         elif stage == 2:
             print(f"\n[Model] 切換至 Stage 2: 解凍部分 Backbone 進行微調")
             # 這裡不需重新鎖定，直接基於目前狀態去解凍特定層
-            
             found_first_ese = False
             # 遍歷主幹網路模組，找到第一個 ESEModule 並開始解凍其後的參數
             for name, module in self.model.named_modules():
-                # A. 識別第一個 ESEModule (即我們結構替換後的那個)
+                # 識別第一個 ESEModule (即結構替換後的那個)
                 if not found_first_ese and isinstance(module, EffectiveSEModule):
                     found_first_ese = True 
-                    # 從這裡開始解凍
+                    # 解凍
                     for param in module.parameters():
                         param.requires_grad = True
-                    # print(f"  - 解凍起始點: {name}")
-
-                # B. 解凍第一個 ESEModule 之後的所有層
+                # 解凍第一個 ESEModule 之後的所有層
                 elif found_first_ese:
                     for param in module.parameters():
                         param.requires_grad = True
             
-            print("✅ Stage 2 設定完成: SA, FC 及第一層 ESE 後的參數已解凍。")
-    # def freeze_and_unfreeze_params(self, unfreeze_start_module=None):
-    #     """
-    #     凍結第一個 SA 模組之前的預訓練權重。
-    #     這個邏輯現在在結構替換後仍然有效，因為我們只需要找到第一個 ESEModule 即可。
-    #     """
-
-    #     # 1. 凍結主幹網路的所有參數
-    #     for param in self.model.parameters():
-    #         param.requires_grad = False
-    #     # 2. 凍結自定義分類頭 (FC)
-    #     for param in self.fc.parameters():
-    #         param.requires_grad = False
-
-    #     # 3. 解凍 Spatial Attention 模組的參數 (SA是新的，必須訓練)
-    #     # 透過 get_sa_parameters 獲取，因為它們現在是結構的一部分
-    #     for param in self.get_sa_parameters():
-    #         param.requires_grad = True
-
-    #     # 4. 解凍分類頭的參數 (FC層是新的，必須訓練)
-    #     for param in self.fc.parameters():
-    #         param.requires_grad = True
-
-    #     # 5. 解凍第一個 ESE/SA 之後的主幹網路參數
-    #     found_first_ese = False
-        
-    #     # 遍歷主幹網路模組，找到第一個 ESEModule (即 Sequential 的第一個元素) 並開始解凍其後的參數
-    #     for name, module in self.model.named_modules():
-    #         # A. 識別第一個 ESEModule
-    #         if not found_first_ese and isinstance(module, EffectiveSEModule):
-    #             found_first_ese = True # 找到第一個 ESE Module
-                
-    #             # 從 ESEModule 本身開始解凍 (它現在是 Sequential 的一部分)
-    #             for param in module.parameters():
-    #                 param.requires_grad = True
-
-    #         # B. 解凍第一個 ESEModule 之後的所有層
-    #         elif found_first_ese:
-    #             for param in module.parameters():
-    #                 param.requires_grad = True
-
-    #     print(f"✅ 凍結完成: SA模組和FC層已解凍。")
+            print("- Stage 2 設定完成: SA, FC 及第一層 ESE 後的參數已解凍。")
 
 class NormedLinear(nn.Module):
     def __init__(self, in_features, out_features):
         super(NormedLinear, self).__init__()
-        # 修正 1: 權重形狀改為 (out_features, in_features) 符合 PyTorch Linear 標準
+        # 權重形狀改為 (out_features, in_features) 符合 PyTorch Linear 標準
         # 這樣 F.linear 自動轉置後才會變成 (in, out)，才能跟輸入相乘
         self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
-        
         # 初始化權重
         self.weight.data.uniform_(-1, 1).renorm_(2, 1, 1e-5).mul_(1e5)
 
     def forward(self, x):
-        # 1. 對輸入特徵 x 做歸一化 (沿著 feature 維度)
+        # 對輸入特徵 x 做歸一化 (沿著 feature 維度)
         out = F.normalize(x, dim=1) 
-        
-        # 修正 2: 對權重做歸一化時，因為形狀變了，現在要沿著 dim=1 (feature 維度) 歸一化
+        # 對權重做歸一化時，因為形狀變了，現在要沿著 dim=1 (feature 維度) 歸一化
         # 這樣每個類別的權重向量長度都會是 1
         normed_weight = F.normalize(self.weight, dim=1)
-        
         # 3. 計算 Cosine Similarity (也就是歸一化後的 Linear)
         out = F.linear(out, normed_weight)
         return out
