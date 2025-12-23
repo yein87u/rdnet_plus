@@ -1,6 +1,6 @@
 # rdnet_plus
 ## 影像視訊處理專案(植物疾病檢測)
-本研究以 PDD271 大規模植物疾病資料集為基礎，提出一套基於 RDNet 預訓練模型的改良式植物疾病分類架構，旨在提升模型對病斑區域的關注能力與整體辨識準確率。文件: https://drive.google.com/file/d/1N_Qva-kB2ZXHc5sh8MFndo4BbTWljfZS/view?usp=drive_link
+本研究以 PDD271 大規模植物疾病資料集為基礎，提出一套基於 RDNet 預訓練模型的改良式植物疾病分類架構，旨在提升模型對病斑區域的關注能力與整體辨識準確率。文件: https://drive.google.com/file/d/1IcbKfjOy0V4NuYTW1vZxg7G8gR-kAV7r/view?usp=drive_link
 
 ### 模型設計
 研究於 RDNet 主幹中引入 dropout 以提升泛化能力，並在 ESE 模組後加入空間注意力機制(Spatial Attention, SA)，強化模型對關鍵病灶區域的空間聚焦效果；同時，將分類頭由傳統 Linear 層替換為 NormLinear，以改善特徵分佈穩定性並增強類別間的判別能力。
