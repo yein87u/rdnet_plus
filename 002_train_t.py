@@ -8,7 +8,7 @@ import utils
 from tqdm import tqdm
 import os
 from models import rdnet_tiny, rdnet_small, rdnet_large, rdnet_base
-from models import RDNet_Tiny, RDNet_Small, RDNet_Base, RDNet_Large, RDNet_Base_ComplexHead, RDNet_Base_SAttention
+from models import RDNet_Tiny, RDNet_Small, RDNet_Base, RDNet_Large, RDNet_Base_SAttention
 import numpy as np
 
 from typing import Dict, Any
@@ -30,13 +30,9 @@ def _GetModel(args):
     elif args.modelName == "rdnet_large.nv_in1k":
         print("Use [rdnet_large.nv_in1k]")
         model = RDNet_Large(num_classes=args.classes)
-    elif args.modelName == 'rdnet_base_reload_head':
-        print("Use [rdnet_base & reload_head]")
-        model = RDNet_Base_ComplexHead(num_classes=args.classes)
     elif args.modelName == 'rdnet_base_SAttention':
         print("Use [rdnet_base & spatial attention]")
         model = RDNet_Base_SAttention(num_classes=args.classes, sa_kernel_size=3, drop_rate=0.2)
-        # model.freeze_and_unfreeze_params()
     
     # model = timm.create_model(
     #     args.modelName, 
@@ -46,17 +42,6 @@ def _GetModel(args):
     # ).to(args.device)
 
     return model
-
-# def _GetOptimizer(args, model):
-#     optimizer = None
-#     if(args.optimizer == "adamw"):
-#         optimizer = torch.optim.AdamW(
-#                         model.parameters(), 
-#                         lr=args.lr, 
-#                         weight_decay=args.weight_decay
-#                     )
-    
-#     return optimizer
 
 def _GetOptimizer(args, model: nn.Module):
     if '.nv_in1k' in args.modelName:
@@ -130,13 +115,11 @@ def one_epoch(args, model, dataloader, optimizer, criterion):
             with torch.set_grad_enabled(args.phase == "train"):
                 images, labels = images.to(args.device), labels.to(args.device)
                 optimizer.zero_grad()
-                # if 'SAttention' in args.modelName:
                 if '.nv_in1k'  in args.modelName or 'SAttention' in args.modelName:
                     features, logits = model(images)   #output.shape = (batch pred_result)
                 else:
                     logits = model(images)   #output.shape = (batch pred_result)
                 
-                # return # 測試專用
                 loss = criterion(logits, labels)
 
                 if args.phase == "train":
@@ -162,13 +145,6 @@ def one_epoch(args, model, dataloader, optimizer, criterion):
 
 
 def _SaveModel(args, model):
-    """
-    儲存每個 fold 的最佳模型
-    args:
-        args.cur_fold : 第幾個 fold
-        args.epoch    : 當前 epoch
-        args.best_acc : 當前最佳驗證準確率
-    """
     # 建立資料夾，例如 rdnet_small_fold1_v1_bz16
     folder_name = f"{args.modelName}_bz{args.batch_size}"
     path = os.path.join(args.root_model, folder_name + "_" + args.train_version)
@@ -219,11 +195,10 @@ def main(args):
     model = _GetModel(args)
 
     base_lr = args.lr
-    UNFREEZE_EPOCH = 20
     if hasattr(model, 'update_training_stage'):
         model.update_training_stage(stage=1)
 
-    print(model)
+    # print(model)
     # # 計算所有參數數量
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -234,27 +209,6 @@ def main(args):
     optimizer = _GetOptimizer(args, model)
     scheduler = _GetScheduler(args, optimizer)
 
-    # # 假設 train_dataset.targets 是一個包含所有標籤的列表或 numpy array
-    # train_labels = train_dataset.cls_num_list # 計算每個類別的樣本數量
-    # num_classes = len(train_labels) # 創建一個包含所有類別計數的列表, 假設類別從 0 到 num_classes-1
-    # counts = [train_labels[i] for i in range(num_classes)]
-    # # 計算類別權重(倒數)
-    # counts = torch.tensor(counts, dtype=torch.float32)  # W_j = 1 / N_j
-    # inverse_counts = 1.0 / counts# 正規化權重, 讓權重總和為類別數，防止 Loss 過大/過小
-    # class_weights = inverse_counts / torch.sum(inverse_counts) * num_classes# 將權重轉移到設備 (如果使用 GPU)if args.device.type == 'cuda':
-    # class_weights = class_weights.to(args.device)
-    # print(f"class_weights: {class_weights}")
-    # # alpha=class_weights,
-
-    # criterion = FocalLoss(
-    #     gamma=2.0, # Gamma 越大，對多數類別的抑制越強，強制關注少數類別
-    #     alpha=None,             # alpha=None時，讓 gamma 專注於難易樣本分類
-    #     reduction='mean', 
-    #     task_type='multi-class',
-    #     num_classes=args.classes
-    # )
-
-    DRW_START_EPOCH = 35
     cls_num_list = train_dataset.cls_num_list
     criterion = nn.CrossEntropyLoss()
     # 備用 Loss： LDAM 帶有邊界調整
@@ -279,7 +233,7 @@ def main(args):
     for epoch in range(args.epochs):
         args.epoch = epoch + 1
 
-        if args.epoch == UNFREEZE_EPOCH and hasattr(model, 'update_training_stage'):
+        if args.epoch == args.unfreeze_epoch and hasattr(model, 'update_training_stage'):
             print(f"\n🌟 Epoch {args.epoch}: 觸發解凍邏輯！重新初始化優化器...")
             # 解凍模型層
             model.update_training_stage(stage=2)
@@ -295,10 +249,11 @@ def main(args):
                 optimizer, scheduler = args.accelerator.prepare(optimizer, scheduler)
                 print("✨ Accelerator: Optimizer re-prepared.")
 
-        if args.epoch == DRW_START_EPOCH:
+        if args.epoch == args.drw_start_epoch:
             print(f"\n⚡ Epoch {args.epoch}: 啟用 LDAM Loss (Deferred Re-Weighting)")
             # 將訓練使用的 Loss 函數切換為帶有邊界調整的 LDAM Loss
             criterion = ldam_criterion.to(args.device)
+        
         # === Training ===
         args.phase = "train"
         train_acc, train_f1, train_precision, \

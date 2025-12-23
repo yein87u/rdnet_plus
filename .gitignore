@@ -6,7 +6,7 @@ weight/
 sa_attention_maps/
 
 # 忽略檔案
-
+*.png
 
 
 
